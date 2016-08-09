@@ -27,6 +27,10 @@ class SQLObject
     @attributes ||= {}
   end
 
+  def attribute_values
+   self.class.columns.map { |attr| self.send(attr) }
+  end
+
   def self.finalize!
     self.columns.each do |name|
       define_method(name) do
@@ -41,12 +45,27 @@ class SQLObject
 
   def initialize(params = {})
     params.each do |attr_name, value|
-      unless self.class.columns.include?(attr_name)
+      attr_name = attr_name.to_sym
+      if self.class.columns.include?(attr_name)
+        self.send("#{attr_name}=", value)
+      else
         raise "unknown attribute '#{attr_name}'"
       end
-      
-      attr_name = attr_name.to_sym
-        self.send("#{attr_name}=", value)
     end
+  end
+
+  def self.all
+    results = DBConnection.execute(<<-SQL)
+      SELECT
+        #{table_name}.*
+      FROM
+        #{table_name}
+    SQL
+
+    parse_all(results)
+  end
+
+  def self.parse_all(results)
+    results.map { |result| self.new(result) }
   end
 end
